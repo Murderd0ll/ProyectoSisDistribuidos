@@ -80,6 +80,23 @@ def limpiar_nodos():
             if (ahora - nodos[nodo]['ultimo_reporte']).seconds > 120:
                 del nodos[nodo]
         time.sleep(10)
+        
+@app.route('/historial/<nodo_id>')
+def historial_nodo(nodo_id):
+    conn = sqlite3.connect('monitor.db')
+    c = conn.cursor()
+    c.execute("""
+        SELECT cpu, memoria, fecha FROM registros
+        WHERE nodo_id = ?
+        ORDER BY fecha DESC LIMIT 20
+    """, (nodo_id,))
+    datos = c.fetchall()
+    conn.close()
+
+    # Devolvemos en formato JSON
+    historial = [{"cpu": row[0], "memoria": row[1], "fecha": row[2]} for row in reversed(datos)]
+    return jsonify(historial)
+        
 
 if __name__ == '__main__':
     init_db()

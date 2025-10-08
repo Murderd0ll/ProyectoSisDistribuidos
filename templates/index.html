@@ -7,46 +7,73 @@
     <style>
         body { font-family: Arial, sans-serif; background: #f6f8fa; text-align: center; }
         h1 { color: #333; }
-        table { margin: 0 auto; border-collapse: collapse; width: 80%; }
+        table { margin: 0 auto; border-collapse: collapse; width: 90%; }
         th, td { padding: 10px; border: 1px solid #ccc; }
         tr:nth-child(even) { background: #e8f0ff; }
         .inactivo { color: red; font-weight: bold; }
         .activo { color: green; font-weight: bold; }
-        canvas { max-width: 700px; margin: 20px auto; }
+        button { padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        canvas { max-width: 700px; margin: 20px auto; display: block; }
+        #contenedorHistorial { display: none; background: #fff; padding: 20px; border-radius: 10px; width: 90%; margin: 20px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
     <h1>Sistema de Monitoreo Distribuido</h1>
+
+    <!-- Tabla -->
     <table>
         <thead>
-            <tr><th>Nodo</th><th>CPU (%)</th><th>RAM (%)</th><th>Último reporte</th><th>Estado</th></tr>
+            <tr><th>Nodo</th><th>CPU (%)</th><th>RAM (%)</th><th>Último reporte</th><th>Estado</th><th>Acciones</th></tr>
         </thead>
         <tbody id="tabla-nodos"></tbody>
     </table>
 
-    <canvas id="graficaCPU"></canvas>
-    <canvas id="graficaRAM"></canvas>
+    <!-- Gráfica en tiempo real -->
+    <h2>Promedios en Tiempo Real</h2>
+    <canvas id="graficaTiempoReal"></canvas>
+
+    <!-- Contenedor de historial -->
+    <div id="contenedorHistorial">
+        <h2 id="tituloHistorial"></h2>
+        <canvas id="graficaHistorialCPU"></canvas>
+        <canvas id="graficaHistorialRAM"></canvas>
+        <button onclick="cerrarHistorial()">❌ Cerrar historial</button>
+    </div>
 
     <script>
-        const ctxCPU = document.getElementById('graficaCPU');
-        const ctxRAM = document.getElementById('graficaRAM');
-        const grafCPU = new Chart(ctxCPU, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'CPU Promedio (%)', data: [] }] }
-        });
-        const grafRAM = new Chart(ctxRAM, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'RAM Promedio (%)', data: [] }] }
-        });
+        let intervalo;
+        let grafTiempoReal;
+        let grafHistCPU, grafHistRAM;
+
+        // Inicializa la gráfica en tiempo real
+        function crearGraficaTiempoReal() {
+            const ctx = document.getElementById('graficaTiempoReal').getContext('2d');
+            grafTiempoReal = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'CPU Promedio (%)', data: [], borderColor: 'orange', tension: 0.3 },
+                        { label: 'RAM Promedio (%)', data: [], borderColor: 'green', tension: 0.3 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+        }
 
         async function actualizarDatos() {
             const res = await fetch('/status');
             const data = await res.json();
-
             const cuerpo = document.getElementById('tabla-nodos');
             cuerpo.innerHTML = '';
 
-            let cpuProm = 0, ramProm = 0, count = 0;
+            let totalCPU = 0;
+            let totalRAM = 0;
+            let activos = 0;
 
             for (const nodo in data) {
                 const d = data[nodo];
@@ -59,35 +86,80 @@
                         <td>${d.memoria.toFixed(1)}</td>
                         <td>${d.ultimo_reporte}</td>
                         <td class="${clase}">${estado}</td>
+                        <td><button onclick="verHistorial('${nodo}')">📊 Ver historial</button></td>
                     </tr>`;
+
                 if (d.activo) {
-                    cpuProm += d.cpu;
-                    ramProm += d.memoria;
-                    count++;
+                    totalCPU += d.cpu;
+                    totalRAM += d.memoria;
+                    activos++;
                 }
             }
 
-            if (count > 0) {
-                cpuProm /= count;
-                ramProm /= count;
-                const hora = new Date().toLocaleTimeString();
-                grafCPU.data.labels.push(hora);
-                grafCPU.data.datasets[0].data.push(cpuProm);
-                grafRAM.data.labels.push(hora);
-                grafRAM.data.datasets[0].data.push(ramProm);
-                if (grafCPU.data.labels.length > 20) {
-                    grafCPU.data.labels.shift();
-                    grafCPU.data.datasets[0].data.shift();
-                    grafRAM.data.labels.shift();
-                    grafRAM.data.datasets[0].data.shift();
+            if (activos > 0) {
+                const cpuProm = totalCPU / activos;
+                const ramProm = totalRAM / activos;
+                const tiempo = new Date().toLocaleTimeString();
+
+                if (grafTiempoReal.data.labels.length > 10) {
+                    grafTiempoReal.data.labels.shift();
+                    grafTiempoReal.data.datasets[0].data.shift();
+                    grafTiempoReal.data.datasets[1].data.shift();
                 }
-                grafCPU.update();
-                grafRAM.update();
+
+                grafTiempoReal.data.labels.push(tiempo);
+                grafTiempoReal.data.datasets[0].data.push(cpuProm);
+                grafTiempoReal.data.datasets[1].data.push(ramProm);
+                grafTiempoReal.update();
             }
         }
 
-        setInterval(actualizarDatos, 3000);
-        actualizarDatos();
+        async function verHistorial(nodo) {
+            document.getElementById('contenedorHistorial').style.display = 'block';
+            const res = await fetch(`/historial/${nodo}`);
+            const historial = await res.json();
+
+            document.getElementById('tituloHistorial').innerText = `Historial de ${nodo}`;
+            const etiquetas = historial.map(d => d.fecha.split(' ')[1]);
+            const datosCPU = historial.map(d => d.cpu);
+            const datosRAM = historial.map(d => d.memoria);
+
+            if (grafHistCPU) grafHistCPU.destroy();
+            if (grafHistRAM) grafHistRAM.destroy();
+
+            const ctxCPU = document.getElementById('graficaHistorialCPU').getContext('2d');
+            const ctxRAM = document.getElementById('graficaHistorialRAM').getContext('2d');
+
+            grafHistCPU = new Chart(ctxCPU, {
+                type: 'line',
+                data: {
+                    labels: etiquetas,
+                    datasets: [{ label: 'CPU (%)', data: datosCPU, borderColor: 'orange', tension: 0.3 }]
+                },
+                options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+            });
+
+            grafHistRAM = new Chart(ctxRAM, {
+                type: 'line',
+                data: {
+                    labels: etiquetas,
+                    datasets: [{ label: 'RAM (%)', data: datosRAM, borderColor: 'green', tension: 0.3 }]
+                },
+                options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+            });
+        }
+
+        function cerrarHistorial() {
+            document.getElementById('contenedorHistorial').style.display = 'none';
+        }
+
+        function iniciarMonitoreo() {
+            crearGraficaTiempoReal();
+            actualizarDatos();
+            intervalo = setInterval(actualizarDatos, 3000);
+        }
+
+        iniciarMonitoreo();
     </script>
 </body>
 </html>
