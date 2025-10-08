@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitoreo Distribuido</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f6f8fa; text-align: center; }
+        h1 { color: #333; }
+        table { margin: 0 auto; border-collapse: collapse; width: 80%; }
+        th, td { padding: 10px; border: 1px solid #ccc; }
+        tr:nth-child(even) { background: #e8f0ff; }
+        .inactivo { color: red; font-weight: bold; }
+        .activo { color: green; font-weight: bold; }
+        canvas { max-width: 700px; margin: 20px auto; }
+    </style>
+</head>
+<body>
+    <h1>Sistema de Monitoreo Distribuido</h1>
+    <table>
+        <thead>
+            <tr><th>Nodo</th><th>CPU (%)</th><th>RAM (%)</th><th>Último reporte</th><th>Estado</th></tr>
+        </thead>
+        <tbody id="tabla-nodos"></tbody>
+    </table>
+
+    <canvas id="graficaCPU"></canvas>
+    <canvas id="graficaRAM"></canvas>
+
+    <script>
+        const ctxCPU = document.getElementById('graficaCPU');
+        const ctxRAM = document.getElementById('graficaRAM');
+        const grafCPU = new Chart(ctxCPU, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'CPU Promedio (%)', data: [] }] }
+        });
+        const grafRAM = new Chart(ctxRAM, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'RAM Promedio (%)', data: [] }] }
+        });
+
+        async function actualizarDatos() {
+            const res = await fetch('/status');
+            const data = await res.json();
+
+            const cuerpo = document.getElementById('tabla-nodos');
+            cuerpo.innerHTML = '';
+
+            let cpuProm = 0, ramProm = 0, count = 0;
+
+            for (const nodo in data) {
+                const d = data[nodo];
+                const estado = d.activo ? 'Activo' : 'Inactivo';
+                const clase = d.activo ? 'activo' : 'inactivo';
+                cuerpo.innerHTML += `
+                    <tr>
+                        <td>${nodo}</td>
+                        <td>${d.cpu.toFixed(1)}</td>
+                        <td>${d.memoria.toFixed(1)}</td>
+                        <td>${d.ultimo_reporte}</td>
+                        <td class="${clase}">${estado}</td>
+                    </tr>`;
+                if (d.activo) {
+                    cpuProm += d.cpu;
+                    ramProm += d.memoria;
+                    count++;
+                }
+            }
+
+            if (count > 0) {
+                cpuProm /= count;
+                ramProm /= count;
+                const hora = new Date().toLocaleTimeString();
+                grafCPU.data.labels.push(hora);
+                grafCPU.data.datasets[0].data.push(cpuProm);
+                grafRAM.data.labels.push(hora);
+                grafRAM.data.datasets[0].data.push(ramProm);
+                if (grafCPU.data.labels.length > 20) {
+                    grafCPU.data.labels.shift();
+                    grafCPU.data.datasets[0].data.shift();
+                    grafRAM.data.labels.shift();
+                    grafRAM.data.datasets[0].data.shift();
+                }
+                grafCPU.update();
+                grafRAM.update();
+            }
+        }
+
+        setInterval(actualizarDatos, 3000);
+        actualizarDatos();
+    </script>
+</body>
+</html>

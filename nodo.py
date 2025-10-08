@@ -3,7 +3,7 @@ import requests
 import time
 import socket
 
-SERVIDOR_URL = "http://127.0.0.1:5000/update"  # Cambia si tu servidor está en otra IP
+SERVIDOR_URL = "http://127.0.0.1:5000/update"  # Cambia si usas otra IP
 INTERVALO = 5  # segundos entre reportes
 
 def obtener_datos():

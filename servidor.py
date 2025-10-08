@@ -1,10 +1,40 @@
-from flask import Flask, request, jsonify
-from datetime import datetime
+from flask import Flask, request, jsonify, render_template
+from datetime import datetime, timedelta
+import sqlite3
+import threading
+import time
 
 app = Flask(__name__)
 
-# Diccionario para guardar el estado de cada nodo
+# =========================
+# CONFIGURACIÓN BASE DE DATOS
+# =========================
+def init_db():
+    conn = sqlite3.connect('monitor.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS registros (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nodo_id TEXT,
+                    cpu REAL,
+                    memoria REAL,
+                    fecha TEXT
+                )''')
+    conn.commit()
+    conn.close()
+
+def guardar_en_db(nodo_id, cpu, memoria):
+    conn = sqlite3.connect('monitor.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO registros (nodo_id, cpu, memoria, fecha) VALUES (?, ?, ?, ?)",
+              (nodo_id, cpu, memoria, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    conn.commit()
+    conn.close()
+
+# =========================
+# DATOS EN MEMORIA
+# =========================
 nodos = {}
+TIEMPO_INACTIVO = 15  # segundos sin actualizar = inactivo
 
 @app.route('/update', methods=['POST'])
 def update():
@@ -16,25 +46,42 @@ def update():
     nodos[nodo_id] = {
         'cpu': cpu,
         'memoria': memoria,
-        'ultimo_reporte': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        'ultimo_reporte': datetime.now()
     }
+
+    guardar_en_db(nodo_id, cpu, memoria)
 
     return jsonify({"mensaje": f"Datos recibidos de {nodo_id}"}), 200
 
-
-@app.route('/status', methods=['GET'])
+@app.route('/status')
 def status():
-    return jsonify(nodos), 200
-
+    estado_actual = {}
+    for nodo, datos in nodos.items():
+        activo = (datetime.now() - datos['ultimo_reporte']) < timedelta(seconds=TIEMPO_INACTIVO)
+        estado_actual[nodo] = {
+            'cpu': datos['cpu'],
+            'memoria': datos['memoria'],
+            'ultimo_reporte': datos['ultimo_reporte'].strftime('%H:%M:%S'),
+            'activo': activo
+        }
+    return jsonify(estado_actual)
 
 @app.route('/')
-def home():
-    html = "<h1>Sistema de Monitoreo Distribuido</h1><ul>"
-    for nodo, datos in nodos.items():
-        html += f"<li><b>{nodo}</b> - CPU: {datos['cpu']}% | RAM: {datos['memoria']}% | Último reporte: {datos['ultimo_reporte']}</li>"
-    html += "</ul>"
-    return html
+def index():
+    return render_template('index.html')
 
+# =========================
+# LIMPIADOR AUTOMÁTICO (ELIMINA NODOS INACTIVOS DE LA LISTA)
+# =========================
+def limpiar_nodos():
+    while True:
+        ahora = datetime.now()
+        for nodo in list(nodos.keys()):
+            if (ahora - nodos[nodo]['ultimo_reporte']).seconds > 120:
+                del nodos[nodo]
+        time.sleep(10)
 
 if __name__ == '__main__':
+    init_db()
+    threading.Thread(target=limpiar_nodos, daemon=True).start()
     app.run(host='0.0.0.0', port=5000)
