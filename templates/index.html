@@ -2,128 +2,434 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Monitoreo Distribuido</title>
+    <title>Monitoreo Distribuido - Múltiples Nodos</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #f6f8fa; text-align: center; }
-        h1 { color: #333; }
-        table { margin: 0 auto; border-collapse: collapse; width: 90%; }
-        th, td { padding: 10px; border: 1px solid #ccc; }
-        tr:nth-child(even) { background: #e8f0ff; }
-        .inactivo { color: red; font-weight: bold; }
-        .activo { color: green; font-weight: bold; }
-        button { padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        body { font-family: Arial, sans-serif; background: #f6f8fa; text-align: center; margin: 0; padding: 20px; }
+        h1 { color: #333; margin-bottom: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        table { 
+            margin: 20px auto; 
+            border-collapse: collapse; 
+            width: 100%; 
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td { 
+            padding: 12px 15px; 
+            border: 1px solid #ddd; 
+            text-align: left;
+        }
+        th { 
+            background: #007bff; 
+            color: white; 
+            font-weight: bold;
+        }
+        tr:nth-child(even) { background: #f8f9fa; }
+        tr:hover { background: #e8f0ff; }
+        
+        .inactivo { 
+            color: #dc3545; 
+            font-weight: bold;
+            background: #ffe6e6 !important;
+        }
+        .activo { 
+            color: #28a745; 
+            font-weight: bold;
+            background: #e8ffe6 !important;
+        }
+        
+        button { 
+            padding: 8px 16px; 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 5px;
+            transition: background 0.3s;
+        }
         button:hover { background: #0056b3; }
-        canvas { max-width: 700px; margin: 20px auto; display: block; }
-        #contenedorHistorial { display: none; background: #fff; padding: 20px; border-radius: 10px; width: 90%; margin: 20px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        button.historial { background: #6c757d; }
+        button.historial:hover { background: #545b62; }
+        
+        .charts-container { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 20px; 
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .chart-wrapper { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 300px;
+            max-width: 600px;
+        }
+        
+        #contenedorHistorial { 
+            display: none; 
+            background: #fff; 
+            padding: 20px; 
+            border-radius: 10px; 
+            width: 95%; 
+            margin: 20px auto; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .stats { 
+            display: flex; 
+            justify-content: center; 
+            gap: 20px; 
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .stat-card { 
+            background: white; 
+            padding: 15px 25px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            min-width: 150px;
+        }
+        .stat-value { 
+            font-size: 24px; 
+            font-weight: bold; 
+            color: #007bff;
+        }
+        
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            gap: 15px;
+        }
+        
+        @media (max-width: 768px) {
+            .header-controls { flex-direction: column; }
+            table { font-size: 14px; }
+            th, td { padding: 8px 10px; }
+        }
     </style>
 </head>
 <body>
-    <h1>Sistema de Monitoreo Distribuido</h1>
+    <div class="container">
+        <div class="header-controls">
+            <h1>🖥️ Sistema de Monitoreo Distribuido</h1>
+            <div>
+                <button onclick="verTiempoReal()">🔁 Tiempo Real</button>
+                <button onclick="verHistorialPromedio()">📈 Historial Promedio</button>
+                <button onclick="actualizarDatos()">🔄 Actualizar Ahora</button>
+            </div>
+        </div>
 
-    <!-- Tabla -->
-    <table>
-        <thead>
-            <tr><th>Nodo</th><th>CPU (%)</th><th>RAM (%)</th><th>Último reporte</th><th>Estado</th><th>Acciones</th></tr>
-        </thead>
-        <tbody id="tabla-nodos"></tbody>
-    </table>
+        <!-- Estadísticas rápidas -->
+        <div class="stats" id="estadisticas">
+            <!-- Se llena dinámicamente -->
+        </div>
 
-    <!-- Gráfica en tiempo real -->
-    <h2>Promedios en Tiempo Real</h2>
-    <canvas id="graficaTiempoReal"></canvas>
+        <!-- Tabla de nodos -->
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nodo</th>
+                        <th>CPU (%)</th>
+                        <th>RAM (%)</th>
+                        <th>Último Reporte</th>
+                        <th>Estado</th>
+                        <th>Tiempo Inactivo</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-nodos">
+                    <tr><td colspan="7" style="text-align: center;">Cargando nodos...</td></tr>
+                </tbody>
+            </table>
+        </div>
 
-    <!-- Contenedor de historial -->
-    <div id="contenedorHistorial">
-        <h2 id="tituloHistorial"></h2>
-        <canvas id="graficaHistorialCPU"></canvas>
-        <canvas id="graficaHistorialRAM"></canvas>
-        <button onclick="cerrarHistorial()">❌ Cerrar historial</button>
+        <!-- Gráficas en tiempo real -->
+        <h2 id="tituloGrafica">📊 Métricas en Tiempo Real</h2>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <canvas id="graficaTiempoRealCPU"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="graficaTiempoRealRAM"></canvas>
+            </div>
+        </div>
+
+        <!-- Contenedor de historial -->
+        <div id="contenedorHistorial">
+            <h2 id="tituloHistorial"></h2>
+            <div class="charts-container">
+                <div class="chart-wrapper">
+                    <canvas id="graficaHistorialCPU"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="graficaHistorialRAM"></canvas>
+                </div>
+            </div>
+            <button onclick="cerrarHistorial()">❌ Cerrar Historial</button>
+        </div>
     </div>
 
     <script>
         let intervalo;
-        let grafTiempoReal;
+        let grafTiempoRealCPU, grafTiempoRealRAM;
         let grafHistCPU, grafHistRAM;
+        let modo = "tiempo_real";
+        let historialGlobal = { labels: [], cpu: [], ram: [] };
 
-        // Inicializa la gráfica en tiempo real
-        function crearGraficaTiempoReal() {
-            const ctx = document.getElementById('graficaTiempoReal').getContext('2d');
-            grafTiempoReal = new Chart(ctx, {
+        // ==========================
+        //  Inicializar Gráficas Tiempo Real
+        // ==========================
+        function crearGraficasTiempoReal() {
+            const ctxCPU = document.getElementById('graficaTiempoRealCPU').getContext('2d');
+            const ctxRAM = document.getElementById('graficaTiempoRealRAM').getContext('2d');
+            
+            grafTiempoRealCPU = new Chart(ctxCPU, {
                 type: 'line',
                 data: {
                     labels: [],
                     datasets: [
-                        { label: 'CPU Promedio (%)', data: [], borderColor: 'orange', tension: 0.3 },
-                        { label: 'RAM Promedio (%)', data: [], borderColor: 'green', tension: 0.3 }
+                        { 
+                            label: 'CPU Promedio (%)', 
+                            data: [], 
+                            borderColor: '#ff6384', 
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            tension: 0.3,
+                            fill: true
+                        }
                     ]
                 },
                 options: {
                     responsive: true,
-                    scales: { y: { beginAtZero: true, max: 100 } }
+                    maintainAspectRatio: false,
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100,
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: {
+                        legend: { display: true },
+                        title: { display: true, text: 'Uso de CPU' }
+                    }
+                }
+            });
+
+            grafTiempoRealRAM = new Chart(ctxRAM, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { 
+                            label: 'RAM Promedio (%)', 
+                            data: [], 
+                            borderColor: '#36a2eb', 
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            tension: 0.3,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100,
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: {
+                        legend: { display: true },
+                        title: { display: true, text: 'Uso de RAM' }
+                    }
                 }
             });
         }
 
+        // ==========================
+        //  Actualizar datos en tiempo real
+        // ==========================
         async function actualizarDatos() {
-            const res = await fetch('/status');
-            const data = await res.json();
-            const cuerpo = document.getElementById('tabla-nodos');
-            cuerpo.innerHTML = '';
+            if (modo !== "tiempo_real") return;
 
-            let totalCPU = 0;
-            let totalRAM = 0;
-            let activos = 0;
+            try {
+                const res = await fetch('/status');
+                const data = await res.json();
+                const cuerpo = document.getElementById('tabla-nodos');
+                const stats = document.getElementById('estadisticas');
+                
+                cuerpo.innerHTML = '';
+                
+                let totalCPU = 0;
+                let totalRAM = 0;
+                let activos = 0;
+                let inactivos = 0;
+                const nodosArray = Object.keys(data);
 
-            for (const nodo in data) {
-                const d = data[nodo];
-                const estado = d.activo ? 'Activo' : 'Inactivo';
-                const clase = d.activo ? 'activo' : 'inactivo';
-                cuerpo.innerHTML += `
-                    <tr>
-                        <td>${nodo}</td>
-                        <td>${d.cpu.toFixed(1)}</td>
-                        <td>${d.memoria.toFixed(1)}</td>
-                        <td>${d.ultimo_reporte}</td>
-                        <td class="${clase}">${estado}</td>
-                        <td><button onclick="verHistorial('${nodo}')">📊 Ver historial</button></td>
-                    </tr>`;
-
-                if (d.activo) {
-                    totalCPU += d.cpu;
-                    totalRAM += d.memoria;
-                    activos++;
-                }
-            }
-
-            if (activos > 0) {
-                const cpuProm = totalCPU / activos;
-                const ramProm = totalRAM / activos;
-                const tiempo = new Date().toLocaleTimeString();
-
-                if (grafTiempoReal.data.labels.length > 10) {
-                    grafTiempoReal.data.labels.shift();
-                    grafTiempoReal.data.datasets[0].data.shift();
-                    grafTiempoReal.data.datasets[1].data.shift();
+                if (nodosArray.length === 0) {
+                    cuerpo.innerHTML = '<tr><td colspan="7" style="text-align: center;">No hay nodos activos</td></tr>';
+                    stats.innerHTML = '<div class="stat-card"><div>Nodos Activos</div><div class="stat-value">0</div></div>';
+                    return;
                 }
 
-                grafTiempoReal.data.labels.push(tiempo);
-                grafTiempoReal.data.datasets[0].data.push(cpuProm);
-                grafTiempoReal.data.datasets[1].data.push(ramProm);
-                grafTiempoReal.update();
+                // Procesar cada nodo
+                nodosArray.forEach(nodo => {
+                    const d = data[nodo];
+                    const estado = d.activo ? 'Activo' : 'Inactivo';
+                    const clase = d.activo ? 'activo' : 'inactivo';
+                    const tiempoInactivo = d.tiempo_inactivo ? `${d.tiempo_inactivo}s` : '-';
+                    
+                    cuerpo.innerHTML += `
+                        <tr class="${clase}">
+                            <td><strong>${nodo}</strong></td>
+                            <td>${d.cpu.toFixed(1)}%</td>
+                            <td>${d.memoria.toFixed(1)}%</td>
+                            <td>${d.ultimo_reporte}</td>
+                            <td>${estado}</td>
+                            <td>${tiempoInactivo}</td>
+                            <td>
+                                <button class="historial" onclick="verHistorialNodo('${nodo}')">
+                                    📊 Historial
+                                </button>
+                            </td>
+                        </tr>`;
+
+                    if (d.activo) {
+                        totalCPU += d.cpu;
+                        totalRAM += d.memoria;
+                        activos++;
+                    } else {
+                        inactivos++;
+                    }
+                });
+
+                // Actualizar estadísticas
+                stats.innerHTML = `
+                    <div class="stat-card">
+                        <div>Nodos Totales</div>
+                        <div class="stat-value">${nodosArray.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>Nodos Activos</div>
+                        <div class="stat-value" style="color: #28a745;">${activos}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>Nodos Inactivos</div>
+                        <div class="stat-value" style="color: #dc3545;">${inactivos}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>CPU Promedio</div>
+                        <div class="stat-value">${activos > 0 ? (totalCPU / activos).toFixed(1) + '%' : 'N/A'}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>RAM Promedio</div>
+                        <div class="stat-value">${activos > 0 ? (totalRAM / activos).toFixed(1) + '%' : 'N/A'}</div>
+                    </div>
+                `;
+
+                // Actualizar gráficas si hay nodos activos
+                if (activos > 0) {
+                    const cpuProm = totalCPU / activos;
+                    const ramProm = totalRAM / activos;
+                    const tiempo = new Date().toLocaleTimeString();
+
+                    // Mantener máximo 15 puntos en el gráfico
+                    if (historialGlobal.labels.length >= 15) {
+                        historialGlobal.labels.shift();
+                        historialGlobal.cpu.shift();
+                        historialGlobal.ram.shift();
+                    }
+
+                    historialGlobal.labels.push(tiempo);
+                    historialGlobal.cpu.push(cpuProm);
+                    historialGlobal.ram.push(ramProm);
+
+                    // Actualizar gráficas
+                    grafTiempoRealCPU.data.labels = historialGlobal.labels;
+                    grafTiempoRealCPU.data.datasets[0].data = historialGlobal.cpu;
+                    grafTiempoRealRAM.data.labels = historialGlobal.labels;
+                    grafTiempoRealRAM.data.datasets[0].data = historialGlobal.ram;
+
+                    grafTiempoRealCPU.update();
+                    grafTiempoRealRAM.update();
+                }
+
+            } catch (error) {
+                console.error('Error actualizando datos:', error);
+                document.getElementById('tabla-nodos').innerHTML = 
+                    '<tr><td colspan="7" style="text-align: center; color: red;">Error cargando datos</td></tr>';
             }
         }
 
-        async function verHistorial(nodo) {
+        // ==========================
+        //  Ver historial de un nodo
+        // ==========================
+        async function verHistorialNodo(nodo) {
+            modo = "historial";
             document.getElementById('contenedorHistorial').style.display = 'block';
-            const res = await fetch(`/historial/${nodo}`);
-            const historial = await res.json();
+            document.getElementById('tituloHistorial').innerText = `Historial del Nodo: ${nodo}`;
+            document.getElementById('tituloGrafica').style.display = 'none';
 
-            document.getElementById('tituloHistorial').innerText = `Historial de ${nodo}`;
-            const etiquetas = historial.map(d => d.fecha.split(' ')[1]);
-            const datosCPU = historial.map(d => d.cpu);
-            const datosRAM = historial.map(d => d.memoria);
+            try {
+                const res = await fetch(`/historial/${nodo}`);
+                const historial = await res.json();
 
+                const etiquetas = historial.map(d => d.fecha.split(' ')[1]);
+                const datosCPU = historial.map(d => d.cpu);
+                const datosRAM = historial.map(d => d.memoria);
+
+                mostrarHistorial(etiquetas, datosCPU, datosRAM);
+            } catch (error) {
+                console.error('Error cargando historial:', error);
+                alert('Error al cargar el historial del nodo');
+            }
+        }
+
+        // ==========================
+        //  Ver historial promedio
+        // ==========================
+        async function verHistorialPromedio() {
+            modo = "historial";
+            document.getElementById('contenedorHistorial').style.display = 'block';
+            document.getElementById('tituloHistorial').innerText = "Historial Promedio del Sistema";
+            document.getElementById('tituloGrafica').style.display = 'none';
+
+            try {
+                const res = await fetch('/historial/promedio');
+                const historial = await res.json();
+
+                const etiquetas = historial.map(d => d.fecha.split(' ')[1]);
+                const datosCPU = historial.map(d => d.cpu);
+                const datosRAM = historial.map(d => d.memoria);
+
+                mostrarHistorial(etiquetas, datosCPU, datosRAM);
+            } catch (error) {
+                console.error('Error cargando historial promedio:', error);
+                alert('Error al cargar el historial promedio');
+            }
+        }
+
+        // ==========================
+        //  Mostrar historial (gráficas)
+        // ==========================
+        function mostrarHistorial(labels, cpu, ram) {
+            // Destruir gráficas anteriores si existen
             if (grafHistCPU) grafHistCPU.destroy();
             if (grafHistRAM) grafHistRAM.destroy();
 
@@ -132,34 +438,86 @@
 
             grafHistCPU = new Chart(ctxCPU, {
                 type: 'line',
-                data: {
-                    labels: etiquetas,
-                    datasets: [{ label: 'CPU (%)', data: datosCPU, borderColor: 'orange', tension: 0.3 }]
+                data: { 
+                    labels: labels, 
+                    datasets: [{
+                        label: 'CPU (%)', 
+                        data: cpu, 
+                        borderColor: '#ff6384', 
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }] 
                 },
-                options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100,
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
             });
 
             grafHistRAM = new Chart(ctxRAM, {
                 type: 'line',
-                data: {
-                    labels: etiquetas,
-                    datasets: [{ label: 'RAM (%)', data: datosRAM, borderColor: 'green', tension: 0.3 }]
+                data: { 
+                    labels: labels, 
+                    datasets: [{
+                        label: 'RAM (%)', 
+                        data: ram, 
+                        borderColor: '#36a2eb', 
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }] 
                 },
-                options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100,
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
             });
         }
 
+        // ==========================
+        //  Cerrar historial
+        // ==========================
         function cerrarHistorial() {
             document.getElementById('contenedorHistorial').style.display = 'none';
+            document.getElementById('tituloGrafica').style.display = 'block';
+            modo = "tiempo_real";
         }
 
+        // ==========================
+        //  Volver a tiempo real
+        // ==========================
+        function verTiempoReal() {
+            cerrarHistorial();
+        }
+
+        // ==========================
+        //  Inicialización
+        // ==========================
         function iniciarMonitoreo() {
-            crearGraficaTiempoReal();
+            crearGraficasTiempoReal();
             actualizarDatos();
             intervalo = setInterval(actualizarDatos, 3000);
         }
 
-        iniciarMonitoreo();
+        // Iniciar cuando la página cargue
+        document.addEventListener('DOMContentLoaded', iniciarMonitoreo);
     </script>
 </body>
 </html>

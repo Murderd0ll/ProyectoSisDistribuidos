@@ -1,7 +1,7 @@
-import psutil
-import requests
-import time
-import socket
+import psutil # Librería para obtener valores de uso de CPU y RAM
+import requests # peticiones http
+import time # para manejar tiempos de espera
+import socket # para obtener el nombre del nodo (comunicación cliente-servidor)
 
 SERVIDOR_URL = "http://127.0.0.1:5000/update"  # Cambia si usas otra IP
 INTERVALO = 5  # segundos entre reportes

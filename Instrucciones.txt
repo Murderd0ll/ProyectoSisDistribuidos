@@ -1,0 +1,10 @@
+Para correr el programa:
+
+Abrir 1 terminal:
+python servidor.py
+
+Abrir 2da terminal:
+python nodo.py
+
+
+En el navegador abrir: 127.0.0.1:5000
